@@ -155,6 +155,43 @@ fn compile(
     Ok((Some(pdf), None))
 }
 
+fn compile_text(
+    lua: &Lua,
+    (input, data, format): (LuaString, LuaValue, LuaString),
+) -> LuaResult<(Option<LuaString>, Option<LuaString>)> {
+    let input_text = input.to_str()?.to_string();
+    let format_text = format.to_str()?.to_string();
+
+    let typst_value_opt = match data {
+        LuaValue::Table(_) => {
+            // Only now do we attempt conversion
+            match data.to_typst(lua) {
+                Ok(val) => Some(val),
+                Err(e) => {
+                    let err_msg = lua.create_string(&format!(
+                        "typst-lua: error converting lua table to typst value: {e}"
+                    ))?;
+                    return Ok((None, Some(err_msg)));
+                }
+            }
+        }
+        _ => None,
+    };
+
+    // Call typst compiler
+    let pdf_bytes = match typst_as_library::compile_text(&input_text, &typst_value_opt, &format_text) {
+        Ok(bytes) => bytes,
+        Err(e) => {
+            let err_msg = lua.create_string(&format!("typst: {e}"))?;
+            return Ok((None, Some(err_msg)));
+        }
+    };
+
+    // Convert result to lua string
+    let pdf = lua.create_string(&pdf_bytes)?;
+    Ok((Some(pdf), None))
+}
+
 // -------------------------------------
 // Module Export
 // -------------------------------------
@@ -163,5 +200,6 @@ fn compile(
 fn typst(lua: &Lua) -> LuaResult<LuaTable> {
     let exports = lua.create_table()?;
     exports.set("compile", lua.create_function(compile)?)?;
+    exports.set("compile_text", lua.create_function(compile_text)?)?;
     Ok(exports)
 }

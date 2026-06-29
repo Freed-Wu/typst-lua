@@ -265,6 +265,15 @@ fn retry<T, E>(mut f: impl FnMut() -> Result<T, E>) -> Result<T, E> {
     }
 }
 
+pub fn compile_text(input: &str, data: &Option<Value>, format: &str) -> Result<Vec<u8>, String> {
+    let current_dir = std::env::current_dir().unwrap();
+    let root = current_dir.as_path();
+    let spath = root.to_string_lossy().into_owned();
+    let source_filename = "<stdin>";
+    let world = TypstWrapperWorld::new(spath, input.to_string(), source_filename.to_string(), data.clone());
+    compile_world(world, format)
+}
+
 pub fn compile(input: &str, data: &Option<Value>, format: &str) -> Result<Vec<u8>, String> {
     let input_path = Path::new(input);
     let root = input_path.parent().unwrap_or(Path::new("."));
@@ -275,8 +284,11 @@ pub fn compile(input: &str, data: &Option<Value>, format: &str) -> Result<Vec<u8
         .file_name()
         .and_then(|n| n.to_str())
         .ok_or_else(|| format!("invalid input path: {input}"))?;
-
     let world = TypstWrapperWorld::new(spath, content, source_filename.to_string(), data.clone());
+    compile_world(world, format)
+}
+
+fn compile_world(world: TypstWrapperWorld, format: &str) -> Result<Vec<u8>, String> {
     if format == "html" {
         let Warned { output, warnings } = typst::compile::<typst_html::HtmlDocument>(&world);
 
