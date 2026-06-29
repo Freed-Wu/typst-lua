@@ -120,9 +120,10 @@ impl FromLuaTypst for LuaTable {
 
 fn compile(
     lua: &Lua,
-    (input, data): (LuaString, LuaValue),
+    (input, data, format): (LuaString, LuaValue, LuaString),
 ) -> LuaResult<(Option<LuaString>, Option<LuaString>)> {
     let input_text = input.to_str()?.to_string();
+    let format_text = format.to_str()?.to_string();
 
     let typst_value_opt = match data {
         LuaValue::Table(_) => {
@@ -141,7 +142,7 @@ fn compile(
     };
 
     // Call typst compiler
-    let pdf_bytes = match typst_as_library::compile(&input_text, &typst_value_opt) {
+    let pdf_bytes = match typst_as_library::compile(&input_text, &typst_value_opt, &format_text) {
         Ok(bytes) => bytes,
         Err(e) => {
             let err_msg = lua.create_string(&format!("typst: {e}"))?;

@@ -65,7 +65,7 @@ impl TypstWrapperWorld {
         let root = PathBuf::from(root);
         let fonts = FontSearcher::new().include_system_fonts(true).search();
         let lib = {
-            let builder = Library::builder();
+            let builder = Library::builder().with_features(typst::Features::from_iter([typst::Feature::Html]));
             let builder = if let Some(d) = data {
                 let dict: Dict = d.clone().cast::<Dict>().unwrap();
                 builder.with_inputs(dict)
@@ -265,7 +265,7 @@ fn retry<T, E>(mut f: impl FnMut() -> Result<T, E>) -> Result<T, E> {
     }
 }
 
-pub fn compile(input: &str, data: &Option<Value>) -> Result<Vec<u8>, String> {
+pub fn compile(input: &str, data: &Option<Value>, format: &str) -> Result<Vec<u8>, String> {
     let input_path = Path::new(input);
     let root = input_path.parent().unwrap_or(Path::new("."));
     let content = fs::read_to_string(input)
@@ -277,12 +277,23 @@ pub fn compile(input: &str, data: &Option<Value>) -> Result<Vec<u8>, String> {
         .ok_or_else(|| format!("invalid input path: {input}"))?;
 
     let world = TypstWrapperWorld::new(spath, content, source_filename.to_string(), data.clone());
-    let Warned { output, warnings } = typst::compile(&world);
+    if format == "html" {
+        let Warned { output, warnings } = typst::compile::<typst_html::HtmlDocument>(&world);
 
-    match output {
-        Ok(document) => typst_pdf::pdf(&document, &PdfOptions::default())
-            .map_err(|errors| render_diagnostics(&world, &errors, &warnings)),
-        Err(errors) => Err(render_diagnostics(&world, &errors, &warnings)),
+        match output {
+            Ok(document) => typst_html::html(&document)
+                .map(|s| s.into_bytes())
+                .map_err(|errors| render_diagnostics(&world, &errors, &warnings)),
+            Err(errors) => Err(render_diagnostics(&world, &errors, &warnings)),
+        }
+    } else {
+        let Warned { output, warnings } = typst::compile(&world);
+
+        match output {
+            Ok(document) => typst_pdf::pdf(&document, &PdfOptions::default())
+                .map_err(|errors| render_diagnostics(&world, &errors, &warnings)),
+            Err(errors) => Err(render_diagnostics(&world, &errors, &warnings)),
+        }
     }
 }
 

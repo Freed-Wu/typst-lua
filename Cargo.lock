@@ -2463,6 +2463,7 @@ dependencies = [
  "time",
  "ttf-parser",
  "typst",
+ "typst-html",
  "typst-kit",
  "typst-pdf",
  "ureq",
