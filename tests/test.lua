@@ -10,7 +10,7 @@ local function join(...)
     return table.concat(t, "/")
 end
 
-local function write_pdf(bytes, outpath)
+local function write_output(bytes, outpath)
     local fh = assert(io.open(outpath, "wb"))
     fh:write(bytes)
     fh:close()
@@ -41,7 +41,7 @@ local function test_compile(template, data_file, should_error)
     else
         assert(not err, "Compilation error: " .. tostring(err))
         assert(pdf_bytes:sub(1,5) == "%PDF-", "Invalid PDF output")
-        write_pdf(pdf_bytes, join(output_dir, template .. ".pdf"))
+        write_output(pdf_bytes, join(output_dir, template .. ".pdf"))
         print(string.format("OK: %s (%.2f ms)", name, ms))
     end
 end
@@ -63,7 +63,7 @@ local function test_compile_table(opts, should_error)
         assert(not err, "Compilation error for " .. name .. ": " .. tostring(err))
         assert(bytes and #bytes > 0, "Empty output for " .. name)
         local ext = opts.format or "pdf"
-        write_pdf(bytes, join(output_dir, opts.file:match("[^/]+$") .. "." .. ext))
+        write_output(bytes, join(output_dir, opts.file:match("[^/]+$") .. "." .. ext))
         print(string.format("OK: %s (%.2f ms)", name, ms))
     end
 end

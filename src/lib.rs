@@ -135,9 +135,9 @@ fn compile(
             compile_legacy(lua, s, data)
         }
         other => {
-            let err = lua.create_string(
-                "typst-lua: compile() expects a table or a file-path string as first argument"
-            )?;
+            let err = lua.create_string(&format!(
+                "typst-lua: compile() expects a table or a file-path string as first argument, got {other:?}"
+            ))?;
             Ok((None, Some(err)))
         }
     }

@@ -78,23 +78,15 @@ impl TypstWrapperWorld {
     pub fn new(root: String, source: String, source_filename: String, data: Option<Value>, enable_html: bool) -> Self {
         let root = PathBuf::from(root);
         let fonts = FontSearcher::new().include_system_fonts(true).search();
-        let lib = {
-            let builder = Library::builder();
-            let builder = if let Some(d) = data {
-                let dict: Dict = d.clone().cast::<Dict>().unwrap();
-                builder.with_inputs(dict)
-            } else {
-                builder
-            };
-            let builder = if enable_html {
-                builder.with_features(
-                    std::iter::once(typst::Feature::Html).collect(),
-                )
-            } else {
-                builder
-            };
-            builder.build()
-        };
+        let mut builder = Library::builder();
+        if let Some(d) = data {
+            let dict: Dict = d.cast::<Dict>().unwrap();
+            builder = builder.with_inputs(dict);
+        }
+        if enable_html {
+            builder = builder.with_features(std::iter::once(typst::Feature::Html).collect());
+        }
+        let lib = builder.build();
         let source_file_id = FileId::new(None, typst::syntax::VirtualPath::new(source_filename));
         let source = Source::new(source_file_id, source.into());
 
@@ -103,7 +95,7 @@ impl TypstWrapperWorld {
             book: LazyHash::new(fonts.book),
             root,
             fonts: fonts.fonts,
-            source: source,
+            source,
             time: time::OffsetDateTime::now_utc(),
             cache_directory: std::env::var_os("CACHE_DIRECTORY")
                 .map(|os_path| os_path.into())
