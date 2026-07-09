@@ -51,7 +51,7 @@ impl FromLuaTypst for LuaTable {
     fn to_typst(self, lua: &Lua) -> LuaResult<TypstValue> {
         // First pass: check if this is an array
         let mut is_array = true;
-        let mut expected = 1i64;
+        let mut expected = 1;
 
         for pair in self.pairs::<LuaValue, LuaValue>() {
             let (key, _) = pair?;
