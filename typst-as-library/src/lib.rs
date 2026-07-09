@@ -278,10 +278,6 @@ fn retry<T, E>(mut f: impl FnMut() -> Result<T, E>) -> Result<T, E> {
     }
 }
 
-pub fn compile(input: &str, data: &Option<Value>) -> Result<Vec<u8>, String> {
-    compile_with_format(input, data, OutputFormat::Pdf)
-}
-
 /// Compile a Typst source file to the given output format.
 pub fn compile_with_format(input: &str, data: &Option<Value>, format: OutputFormat) -> Result<Vec<u8>, String> {
     let input_path = Path::new(input);

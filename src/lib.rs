@@ -1,6 +1,6 @@
 use mlua::prelude::*;
 use typst::foundations::{Array, Dict, Str, Value as TypstValue};
-use typst_as_library::{self, OutputFormat};
+use typst_as_library::OutputFormat;
 
 // -------------------------------------
 // TRAIT: FromLuaTypst
@@ -10,32 +10,23 @@ trait FromLuaTypst {
     fn to_typst(self, lua: &Lua) -> LuaResult<TypstValue>;
 }
 
-// Implement for LuaValue
 impl FromLuaTypst for LuaValue {
     fn to_typst(self, lua: &Lua) -> LuaResult<TypstValue> {
         match self {
             LuaValue::Nil => Ok(TypstValue::None),
-
             LuaValue::Boolean(b) => Ok(TypstValue::Bool(b)),
             LuaValue::Number(n) => Ok(TypstValue::Float(n)),
             LuaValue::Integer(n) => Ok(TypstValue::Int(n)),
-
             LuaValue::String(s) => match s.to_str() {
                 Ok(text) => Ok(TypstValue::Str(Str::from(text.to_string()))),
-                Err(_) => {
-                    let bytes_vec: Vec<u8> = s.as_bytes().to_vec();
-                    Ok(TypstValue::Bytes(typst::foundations::Bytes::new(bytes_vec)))
-                }
+                Err(_) => Ok(TypstValue::Bytes(typst::foundations::Bytes::new(
+                    s.as_bytes().to_vec(),
+                ))),
             },
-
             LuaValue::Table(t) => t.to_typst(lua),
-
-            LuaValue::UserData(_) => {
-                return Err(LuaError::RuntimeError(
-                    "Lua userdata cannot be converted to Typst value".into(),
-                ));
-            }
-
+            LuaValue::UserData(_) => Err(LuaError::RuntimeError(
+                "Lua userdata cannot be converted to Typst value".into(),
+            )),
             other => Err(LuaError::RuntimeError(format!(
                 "Unsupported Lua value: {other:?}"
             ))),
@@ -43,19 +34,14 @@ impl FromLuaTypst for LuaValue {
     }
 }
 
-// -------------------------------------
-// Implement for Lua Table (no lifetime)
-// -------------------------------------
-
 impl FromLuaTypst for LuaTable {
     fn to_typst(self, lua: &Lua) -> LuaResult<TypstValue> {
-        // First pass: check if this is an array
+        // First pass: check if this is a sequential array
         let mut is_array = true;
         let mut expected = 1;
 
         for pair in self.pairs::<LuaValue, LuaValue>() {
             let (key, _) = pair?;
-
             match key {
                 LuaValue::Integer(idx) => {
                     if idx != expected {
@@ -92,7 +78,6 @@ impl FromLuaTypst for LuaTable {
             for pair in self.pairs::<LuaValue, LuaValue>() {
                 let (key, value) = pair?;
                 let v = value.to_typst(lua)?;
-
                 let key_str = match key {
                     LuaValue::Integer(idx) => Str::from(idx.to_string()),
                     LuaValue::Number(n) if n.fract() == 0.0 => Str::from((n as i64).to_string()),
@@ -104,7 +89,6 @@ impl FromLuaTypst for LuaTable {
                         )))
                     }
                 };
-
                 map.insert(key_str, v);
             }
             Ok(TypstValue::Dict(map))
@@ -116,66 +100,6 @@ impl FromLuaTypst for LuaTable {
 // Compile function exposed to Lua
 // -------------------------------------
 
-/// Dispatch helper: accepts either:
-/// - Old style: `typst.compile("file.typ", data_table)`
-/// - New style: `typst.compile{ file="file.typ", input=..., format="html", ppi=144 }`
-fn compile(
-    lua: &Lua,
-    args: LuaMultiValue,
-) -> LuaResult<(Option<LuaString>, Option<LuaString>)> {
-    let mut iter = args.into_iter();
-    match iter.next() {
-        // New table-based API: typst.compile{ file=..., format=..., ... }
-        Some(LuaValue::Table(t)) => compile_from_table(lua, t),
-        // Legacy API: typst.compile("file.typ", data)
-        Some(LuaValue::String(s)) => {
-            let data = iter.next().unwrap_or(LuaValue::Nil);
-            compile_legacy(lua, s, data)
-        }
-        other => {
-            let err = lua.create_string(&format!(
-                "typst-lua: compile() expects a table or a file-path string as first argument, got {other:?}"
-            ))?;
-            Ok((None, Some(err)))
-        }
-    }
-}
-
-fn compile_legacy(
-    lua: &Lua,
-    input: LuaString,
-    data: LuaValue,
-) -> LuaResult<(Option<LuaString>, Option<LuaString>)> {
-    let input_text = input.to_str()?.to_string();
-
-    let typst_value_opt = match data {
-        LuaValue::Table(_) => {
-            match data.to_typst(lua) {
-                Ok(val) => Some(val),
-                Err(e) => {
-                    let err_msg = lua.create_string(&format!(
-                        "typst-lua: error converting lua table to typst value: {e}"
-                    ))?;
-                    return Ok((None, Some(err_msg)));
-                }
-            }
-        }
-        _ => None,
-    };
-
-    let pdf_bytes = match typst_as_library::compile(&input_text, &typst_value_opt) {
-        Ok(bytes) => bytes,
-        Err(e) => {
-            let err_msg = lua.create_string(&format!("typst: {e}"))?;
-            return Ok((None, Some(err_msg)));
-        }
-    };
-
-    let pdf = lua.create_string(&pdf_bytes)?;
-    Ok((Some(pdf), None))
-}
-
-/// Table-based compile API:
 /// ```lua
 /// typst.compile{
 ///   file   = "file.typ",
@@ -184,9 +108,9 @@ fn compile_legacy(
 ///   ppi    = 144.0,              -- optional, only for "png" (default 144.0)
 /// }
 /// ```
-/// Returns `(bytes, err)` where `bytes` is a Lua string and `err` is nil on
-/// success, or `(nil, err_string)` on failure.
-fn compile_from_table(
+/// Returns `(bytes, err)`: `bytes` is a Lua string on success, `err` is a
+/// string on failure.
+fn compile(
     lua: &Lua,
     args: LuaTable,
 ) -> LuaResult<(Option<LuaString>, Option<LuaString>)> {
@@ -270,8 +194,7 @@ fn compile_from_table(
         }
     };
 
-    let result = lua.create_string(&bytes)?;
-    Ok((Some(result), None))
+    Ok((Some(lua.create_string(&bytes)?), None))
 }
 
 // -------------------------------------

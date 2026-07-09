@@ -22,33 +22,7 @@ local function load_data(data_file)
     return assert(loadfile(path, "t", _ENV)())
 end
 
-local function test_compile(template, data_file, should_error)
-    local name = template
-    if data_file then
-        name = name .. " with " .. data_file
-    end
-    
-    local data = load_data(data_file)
-    local t0 = socket.gettime()
-    local pdf_bytes, err = typst.compile(join("templates", template), data)
-    local ms = (socket.gettime() - t0) * 1000
-    
-    if should_error then
-        assert(err, "Expected compilation error but got none")
-        assert(not pdf_bytes, "Expected no PDF output")
-        print(string.format("OK: %s errored as expected (%.2f ms)", name, ms))
-        print("Error:" .. err)
-    else
-        assert(not err, "Compilation error: " .. tostring(err))
-        assert(pdf_bytes:sub(1,5) == "%PDF-", "Invalid PDF output")
-        write_output(pdf_bytes, join(output_dir, template .. ".pdf"))
-        print(string.format("OK: %s (%.2f ms)", name, ms))
-    end
-end
-
---- New table-based API tests ---
-
-local function test_compile_table(opts, should_error)
+local function test_compile(opts, should_error)
     local name = opts.file .. " [" .. (opts.format or "pdf") .. "]"
     local t0 = socket.gettime()
     local bytes, err = typst.compile(opts)
@@ -69,21 +43,21 @@ local function test_compile_table(opts, should_error)
 end
 
 -- Tests
-test_compile("test_error.typ", "test_typ_extended.lua", true)
-test_compile("test_blank.typ")
-test_compile("test.typ", "test_typ_extended.lua")
-test_compile("test_decode.typ", "decoded_image.lua")
-test_compile("test_extended.typ", "test_typ_extended.lua")
-test_compile("test_download.typ")
-test_compile("test_pdfinclusion.typ", "test_pdf_inclusion.lua")
+test_compile({ file = join("templates", "test_error.typ"), input = load_data("test_typ_extended.lua") }, true)
+test_compile{ file = join("templates", "test_blank.typ") }
+test_compile{ file = join("templates", "test.typ"), input = load_data("test_typ_extended.lua") }
+test_compile{ file = join("templates", "test_decode.typ"), input = load_data("decoded_image.lua") }
+test_compile{ file = join("templates", "test_extended.typ"), input = load_data("test_typ_extended.lua") }
+test_compile{ file = join("templates", "test_download.typ") }
+test_compile{ file = join("templates", "test_pdfinclusion.typ"), input = load_data("test_pdf_inclusion.lua") }
 
--- Table-based API tests
-test_compile_table{ file = join("templates", "test_blank.typ"), format = "pdf" }
-test_compile_table{ file = join("templates", "test_blank.typ"), format = "html" }
-test_compile_table{ file = join("templates", "test_blank.typ"), format = "svg" }
-test_compile_table{ file = join("templates", "test_blank.typ"), format = "png", ppi = 144 }
-test_compile_table{
-    file  = join("templates", "test.typ"),
-    input = load_data("test_typ_extended.lua"),
+-- Multi-format tests
+test_compile{ file = join("templates", "test_blank.typ"), format = "pdf" }
+test_compile{ file = join("templates", "test_blank.typ"), format = "html" }
+test_compile{ file = join("templates", "test_blank.typ"), format = "svg" }
+test_compile{ file = join("templates", "test_blank.typ"), format = "png", ppi = 144 }
+test_compile{
+    file   = join("templates", "test.typ"),
+    input  = load_data("test_typ_extended.lua"),
     format = "html",
 }
